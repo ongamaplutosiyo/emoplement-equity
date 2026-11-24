@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Employment Equity Workbook Builder</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>Employment Equity Workbook Builder</h1>
+      <p class="sub">Upload the employee list. Get the full EE workbook with all tabs and formulas.</p>
+    </div>
+    <p class="privacy" title="Your file is read and built inside this browser window">
+      Privacy: the file is processed on this computer. Nothing is uploaded or stored.
+    </p>
+  </header>
+
+  <main>
+    <!-- 1. Upload -->
+    <section class="card" id="step-upload">
+      <h2>1. Upload the employee list</h2>
+      <p class="hint">
+        Use the Skills Report format (the EEA2 &amp; EEA4 information sheet): Empl Code, Surname, Full Names, Gender, RACE,
+        Date Engaged, Termination Date, Occ Levels, Perm/Temp, Nationality, Disabled, then the remuneration columns.
+        Accepted files: .xlsx, .xls, .csv.
+      </p>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept=".xlsx,.xls,.csv">
+        <span id="dropText">Drop the file here, or click to choose it</span>
+      </label>
+      <div id="fileInfo" class="info" hidden></div>
+      <div id="fileError" class="alert" role="alert" hidden></div>
+    </section>
+
+    <!-- 2. Column mapping -->
+    <section class="card" id="step-map" hidden>
+      <h2>2. Columns found in your file</h2>
+      <p class="hint" id="mapHint"></p>
+      <table class="grid" id="mapTable"></table>
+    </section>
+
+    <!-- 3. Company and period -->
+    <section class="card" id="step-settings">
+      <h2>3. Company and period</h2>
+      <div class="form">
+        <label>Company name
+          <input type="text" id="company" maxlength="120" placeholder="Company name as it should appear">
+        </label>
+        <label>Period start
+          <input type="date" id="periodStart" value="2025-09-01">
+        </label>
+        <label>Period end
+          <input type="date" id="periodEnd" value="2026-08-31">
+        </label>
+        <label>EAP (province or national)
+          <select id="province"></select>
+        </label>
+        <label class="wide">Industry sector (Gazette 52514)
+          <select id="sector"></select>
+        </label>
+        <fieldset class="wide">
+          <legend>Semi-skilled and unskilled goals (optional, % of each level)</legend>
+          <p class="hint small">These goals are not in the Gazette. Leave blank if the company has none.</p>
+          <label>Semi-skilled male %
+            <input type="number" id="semiMale" min="0" max="100" step="0.1">
+          </label>
+          <label>Semi-skilled female %
+            <input type="number" id="semiFemale" min="0" max="100" step="0.1">
+          </label>
+          <label>Unskilled male %
+            <input type="number" id="unskMale" min="0" max="100" step="0.1">
+          </label>
+          <label>Unskilled female %
+            <input type="number" id="unskFemale" min="0" max="100" step="0.1">
+          </label>
+        </fieldset>
+      </div>
+    </section>
+
+    <!-- 4. Data check -->
+    <section class="card" id="step-check" hidden>
+      <h2>4. Check the data</h2>
+      <div class="cards" id="summaryCards"></div>
+      <div id="notes"></div>
+      <h3>Items to fix</h3>
+      <p class="hint" id="issueHint"></p>
+      <div class="scroll">
+        <table class="grid" id="issueTable"></table>
+      </div>
+      <p class="hint small" id="issueMore"></p>
+    </section>
+
+    <!-- 5. Build -->
+    <section class="card" id="step-build">
+      <h2>5. Create the workbook</h2>
+      <p class="hint">
+        The workbook keeps every tab and formula of the EE workbook. Items to fix are listed on the
+        <strong>Import Log</strong> tab and the <strong>Checks</strong> tab turns green when everything is resolved.
+      </p>
+      <button type="button" id="build" class="primary" disabled>Create workbook</button>
+      <div id="buildMsg" class="msg" role="status"></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Employment Equity Workbook Builder. Built for the EEA2, EEA4, EEA12 and EEA13 workflow. Check results against the official forms before submitting.</p>
+  </footer>
+
+  <script src="vendor/xlsx.min.js"></script>
+  <script src="vendor/jszip.min.js"></script>
+  <script src="vendor/hyperformula.full.min.js"></script>
+  <script src="template.js"></script>
+  <script src="calc.js"></script>
+  <script src="core.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
