@@ -179,7 +179,7 @@
   function normaliseNow(fmt) {
     var p = state.parsed;
     p.res = EECore.addDuplicateIssues(EECore.normalise(p.rows, p.det, p.pm ? p.pm.map : null, { dateFormat: fmt }));
-    var info = (p.res.notes || []).filter(function (n) { return /^Text dates read/.test(n); })[0] || '';
+    var info = (p.res.notes || []).filter(function (n) { return /^Text dates read|cell format/.test(n); }).join(' ');
     $('dateInfo').textContent = info;
   }
 

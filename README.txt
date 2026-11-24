@@ -16,6 +16,11 @@ Size
 Up to 6,000 employees in the period. Reading and building a large list takes about 30 to 60
 seconds. The Quatro Cleaning Services list (6,016 rows) builds this way.
 
+Dates shown in the file
+The builder reads how each date cell is displayed in the file (for example month/day/year,
+shown as mm-dd-yy). The date values are kept as they are, and the downloaded workbook shows every
+date as day/month/year. The page says which display format it found.
+
 Date format
 Choose how text dates in the file are written, on the mapping step, under the column list:
 Detect from the file (recommended), day/month/year, month/day/year, or year/month/day.

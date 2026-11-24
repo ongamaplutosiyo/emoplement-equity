@@ -162,7 +162,7 @@
   /** Parse an uploaded file once; repeated calls with the same buffer reuse the result. */
   function openWorkbook(arrayBuffer) {
     if (arrayBuffer !== cachedBuf) {
-      cachedWb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: false, cellNF: false, cellText: false });
+      cachedWb = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array', cellDates: false, cellNF: true, cellText: false });
       cachedBuf = arrayBuffer;
     }
     return cachedWb;
@@ -176,6 +176,8 @@
     var firstRow = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']).s.r : 0;
     var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '', blankrows: true });
     rows.firstRow = firstRow;   // 0-based Excel row of rows[0]
+    rows.ws = ws;
+    rows.firstCol = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']).s.c : 0;
     return { sheetNames: wb.SheetNames, sheetName: name, rows: rows };
   }
 
@@ -253,6 +255,35 @@
     if (second12 > 0 && first12 === 0) order = 'mdy';
     if (first12 > 0 && second12 > 0) conflict = true;
     return { order: order, conflict: conflict, ambiguous: slash > 0 && first12 === 0 && second12 === 0, textDates: slash };
+  }
+
+  /**
+   * How the file DISPLAYS its date cells (from the cell number format, e.g. mm-dd-yy = month first).
+   * Returns {order: 'dmy'|'mdy'|'ymd'|null, format: 'mm-dd-yy', cells: n} or null when there are no date cells.
+   */
+  function detectDateDisplay(rows, detected) {
+    if (!rows.ws) return null;
+    var ws = rows.ws, counts = {}, sample = {}, cells = 0;
+    var cols = [detected.map.engaged, detected.map.term].filter(function (x) { return x !== undefined; });
+    rows.slice(detected.headerRow + 1).forEach(function (row, i) {
+      cols.forEach(function (ci) {
+        var v = row[ci];
+        if (typeof v !== 'number' || v < 1) return;
+        var addr = XLSX.utils.encode_cell({ r: rows.firstRow + detected.headerRow + 1 + i, c: rows.firstCol + ci });
+        var cell = ws[addr];
+        if (!cell || !cell.z) return;
+        var z = String(cell.z).toLowerCase();
+        var first = z.replace(/[^dmy]/g, '').charAt(0);
+        var order = first === 'd' ? 'dmy' : first === 'm' ? 'mdy' : first === 'y' ? 'ymd' : null;
+        if (!order) return;
+        cells++;
+        counts[order] = (counts[order] || 0) + 1;
+        sample[order] = sample[order] || cell.z;
+      });
+    });
+    if (!cells) return null;
+    var best = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; })[0];
+    return { order: best, format: sample[best], cells: cells, mixed: Object.keys(counts).length > 1 };
   }
 
   function normalise(rows, detected, permMap, opts) {
@@ -379,6 +410,12 @@
     var notes = [];
     if (noteFnBlank) notes.push('Nationality taken from the FN column: a blank FN was treated as RSA (South African).');
     var orderWords = { dmy: 'day/month/year', mdy: 'month/day/year', ymd: 'year/month/day' };
+    var display = detectDateDisplay(rows, detected);
+    if (display && display.order !== 'dmy') {
+      notes.push('The date cells in this file are displayed ' + orderWords[display.order] + ' (cell format ' + display.format +
+        '). The dates are stored as real dates, so they are not changed; the downloaded workbook shows them as day/month/year.');
+    }
+    if (display && display.mixed) notes.push('The date cells in this file use more than one display format; the downloaded workbook shows every date as day/month/year.');
     if (dateChoice === 'auto' && dateInfo && dateInfo.textDates) {
       notes.push('Text dates read as ' + orderWords[dateOrder] + ' (detected from the file' +
         (dateInfo.conflict ? '; some dates conflict, so check the Import Log' : (dateInfo.ambiguous ? '; no date in the file settles the order, so day/month/year was used' : '')) + ').');
@@ -388,7 +425,7 @@
     if (employees.some(function (e) { return e.permFromPayroll; })) notes.push('__PERM_NOTE__');
     if (noRemunRows) notes.push('This file has no remuneration columns, so the EEA4 remuneration figures will be blank.');
     if (totalOnlyRows) notes.push('Only a total remuneration is given for ' + totalOnlyRows + ' employee(s); it is placed in Salary/Wage (no fixed/variable split).');
-    return { employees: employees, issues: issues, excluded: excluded, notes: notes, dateOrder: dateOrder, rowsRead: rows.length - detected.headerRow - 1, skipped: skipped };
+    return { employees: employees, issues: issues, excluded: excluded, notes: notes, dateOrder: dateOrder, dateDisplay: display, rowsRead: rows.length - detected.headerRow - 1, skipped: skipped };
   }
 
   /**
@@ -927,7 +964,7 @@
     addDuplicateIssues: addDuplicateIssues, summarise: summarise,
     buildWorkbook: buildWorkbook, readTemplateLists: readTemplateLists,
     detectPeriod: detectPeriod, parseLongDate: parseLongDate, readPermMap: readPermMap, applyPeriod: applyPeriod,
-    parseDate: parseDate, parseNumber: parseNumber, detectDateOrder: detectDateOrder,
+    parseDate: parseDate, parseNumber: parseNumber, detectDateOrder: detectDateOrder, detectDateDisplay: detectDateDisplay,
     setCellsInSheet: setCellsInSheet, serialFromYMD: serialFromYMD
   };
 });
