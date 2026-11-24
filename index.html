@@ -39,6 +39,17 @@
       <h2>2. Columns found in your file</h2>
       <p class="hint" id="mapHint"></p>
       <table class="grid" id="mapTable"></table>
+      <div class="dateop">
+        <label>Date format in the file
+          <select id="dateFormat">
+            <option value="auto">Detect from the file (recommended)</option>
+            <option value="dmy">Day / month / year (e.g. 31/08/2026)</option>
+            <option value="mdy">Month / day / year (e.g. 08/31/2026)</option>
+            <option value="ymd">Year / month / day (e.g. 2026/08/31)</option>
+          </select>
+        </label>
+        <p class="hint small" id="dateInfo"></p>
+      </div>
     </section>
 
     <!-- 3. Company and period -->

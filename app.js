@@ -79,6 +79,12 @@
       if (f) loadFile(f);
     });
 
+    $('dateFormat').addEventListener('change', function () {
+      if (!state.parsed) return;
+      normaliseNow(this.value);
+      renderMapping();
+      refresh();
+    });
     ['company', 'periodStart', 'periodEnd', 'province', 'sector', 'semiMale', 'semiFemale', 'unskMale', 'unskFemale']
       .forEach(function (id) {
         $(id).addEventListener('input', refresh);
@@ -146,8 +152,10 @@
     var rd = chosen.rd, det = chosen.det;
     var per = EECore.detectPeriod(rd.rows);
     var pm = EECore.readPermMap(buf, chosen.name);
-    var res = EECore.addDuplicateIssues(EECore.normalise(rd.rows, det, pm ? pm.map : null));
-    state.parsed = { fileName: fileName, sheet: chosen.name, rows: rd.rows, det: det, res: res, per: per };
+    state.parsed = { fileName: fileName, sheet: chosen.name, rows: rd.rows, det: det, pm: pm, per: per, res: null };
+    $('dateFormat').value = 'auto';
+    normaliseNow($('dateFormat').value);
+    var res = state.parsed.res;
 
     // Pre-fill company and period from the file title when the user has not typed anything yet
     if (per.company && !$('company').value) $('company').value = per.company.replace(/\b\w/g, function (c) { return c.toUpperCase(); });
@@ -165,6 +173,14 @@
     $('fileInfo').textContent = fileName + ': sheet "' + chosen.name + '", header on row ' + (det.headerRow + 1) +
       ', ' + res.employees.length + ' employee rows read.';
     refresh();
+  }
+
+  /** Read the employee rows again with the chosen date format. */
+  function normaliseNow(fmt) {
+    var p = state.parsed;
+    p.res = EECore.addDuplicateIssues(EECore.normalise(p.rows, p.det, p.pm ? p.pm.map : null, { dateFormat: fmt }));
+    var info = (p.res.notes || []).filter(function (n) { return /^Text dates read/.test(n); })[0] || '';
+    $('dateInfo').textContent = info;
   }
 
   function isoFromSerial(serial) {

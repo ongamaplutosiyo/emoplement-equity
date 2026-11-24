@@ -107,7 +107,8 @@
    * Accepts Excel date numbers, dd/mm/yyyy text (1/5/2024, 31/082026, 31-08-2026),
    * yyyy-mm-dd text. Rejects impossible dates such as 31/02/2025 and time-only values.
    */
-  function parseDate(v) {
+  function parseDate(v, order) {
+    order = order || 'dmy';
     if (v === null || v === undefined || v === '') return { serial: null, iso: '', problem: '' };
     var y, m, d;
     if (typeof v === 'number') {
@@ -124,8 +125,16 @@
       if (iso) { y = +iso[1]; m = +iso[2]; d = +iso[3]; }
       else {
         var parts = s.split(/[^0-9]+/).filter(function (x) { return x.length > 0; });
-        if (parts.length === 3) { d = +parts[0]; m = +parts[1]; y = +parts[2]; }
-        else if (parts.length === 2 && parts[1].length === 6) { d = +parts[0]; m = +parts[1].slice(0, 2); y = +parts[1].slice(2); }
+        if (parts.length === 3) {
+          if (order === 'mdy') { m = +parts[0]; d = +parts[1]; y = +parts[2]; }
+          else if (order === 'ymd') { y = +parts[0]; m = +parts[1]; d = +parts[2]; }
+          else { d = +parts[0]; m = +parts[1]; y = +parts[2]; }
+        }
+        else if (parts.length === 2 && parts[1].length === 6) {
+          if (order === 'mdy') { m = +parts[0]; d = +parts[1].slice(0, 2); }
+          else { d = +parts[0]; m = +parts[1].slice(0, 2); }
+          y = +parts[1].slice(2);
+        }
         else if (parts.length === 1 && parts[0].length === 8) { d = +parts[0].slice(0, 2); m = +parts[0].slice(2, 4); y = +parts[0].slice(4); }
         else return { serial: null, iso: '', problem: 'not a readable date "' + s + '"' };
       }
@@ -222,7 +231,36 @@
    *   engaged (serial|null), term (serial|null), prevPos, curPos, level (text to write),
    *   levelNo (1-6|null), levelStart (text), perm, nationality, disabled, fixed[12], variable[7]}
    */
-  function normalise(rows, detected, permMap) {
+  /**
+   * Work out whether text dates such as 01/05/2024 are day-first or month-first, from the values
+   * in the file (any first number above 12 means day-first; any second number above 12 means month-first).
+   */
+  function detectDateOrder(rows, detected) {
+    var idxs = [detected.map.engaged, detected.map.term].filter(function (x) { return x !== undefined; });
+    var first12 = 0, second12 = 0, slash = 0;
+    rows.slice(detected.headerRow + 1).forEach(function (row) {
+      idxs.forEach(function (ci) {
+        var v = row[ci];
+        if (typeof v !== 'string') return;
+        var m = v.trim().match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+        if (!m) return;
+        slash++;
+        if (+m[1] > 12) first12++;
+        if (+m[2] > 12) second12++;
+      });
+    });
+    var order = 'dmy', conflict = false;
+    if (second12 > 0 && first12 === 0) order = 'mdy';
+    if (first12 > 0 && second12 > 0) conflict = true;
+    return { order: order, conflict: conflict, ambiguous: slash > 0 && first12 === 0 && second12 === 0, textDates: slash };
+  }
+
+  function normalise(rows, detected, permMap, opts) {
+    var dateChoice = (opts && opts.dateFormat) || 'auto';
+    var dateInfo = null;
+    var dateOrder = 'dmy';
+    if (dateChoice === 'auto') { dateInfo = detectDateOrder(rows, detected); dateOrder = dateInfo.order; }
+    else dateOrder = dateChoice;
     var noRemunRows = 0, totalOnlyRows = 0;
     var m = detected.map;
     var employees = [], issues = [], skipped = 0, noteFnBlank = false, excluded = [];
@@ -259,10 +297,10 @@
                            'Enter African, Coloured, Indian or White');
 
       // Dates
-      var eng = parseDate(get(row, 'engaged'));
+      var eng = parseDate(get(row, 'engaged'), dateOrder);
       rec.engaged = eng.serial;
       if (eng.problem || eng.serial === null) issue(rec, 'Date engaged', eng.problem || 'missing', 'Enter a valid date (dd/mm/yyyy)');
-      var trm = parseDate(get(row, 'term'));
+      var trm = parseDate(get(row, 'term'), dateOrder);
       rec.term = trm.serial;
       if (trm.problem && trm.problem !== 'value is 0') issue(rec, 'Termination date', trm.problem, 'Enter a valid date or leave blank');
 
@@ -340,10 +378,17 @@
     }
     var notes = [];
     if (noteFnBlank) notes.push('Nationality taken from the FN column: a blank FN was treated as RSA (South African).');
+    var orderWords = { dmy: 'day/month/year', mdy: 'month/day/year', ymd: 'year/month/day' };
+    if (dateChoice === 'auto' && dateInfo && dateInfo.textDates) {
+      notes.push('Text dates read as ' + orderWords[dateOrder] + ' (detected from the file' +
+        (dateInfo.conflict ? '; some dates conflict, so check the Import Log' : (dateInfo.ambiguous ? '; no date in the file settles the order, so day/month/year was used' : '')) + ').');
+    } else if (dateChoice !== 'auto') {
+      notes.push('Text dates read as ' + orderWords[dateOrder] + ' (chosen on the page).');
+    }
     if (employees.some(function (e) { return e.permFromPayroll; })) notes.push('__PERM_NOTE__');
     if (noRemunRows) notes.push('This file has no remuneration columns, so the EEA4 remuneration figures will be blank.');
     if (totalOnlyRows) notes.push('Only a total remuneration is given for ' + totalOnlyRows + ' employee(s); it is placed in Salary/Wage (no fixed/variable split).');
-    return { employees: employees, issues: issues, excluded: excluded, notes: notes, rowsRead: rows.length - detected.headerRow - 1, skipped: skipped };
+    return { employees: employees, issues: issues, excluded: excluded, notes: notes, dateOrder: dateOrder, rowsRead: rows.length - detected.headerRow - 1, skipped: skipped };
   }
 
   /**
@@ -828,7 +873,7 @@
     addDuplicateIssues: addDuplicateIssues, summarise: summarise,
     buildWorkbook: buildWorkbook, readTemplateLists: readTemplateLists,
     detectPeriod: detectPeriod, parseLongDate: parseLongDate, readPermMap: readPermMap, applyPeriod: applyPeriod,
-    parseDate: parseDate, parseNumber: parseNumber,
+    parseDate: parseDate, parseNumber: parseNumber, detectDateOrder: detectDateOrder,
     setCellsInSheet: setCellsInSheet, serialFromYMD: serialFromYMD
   };
 });

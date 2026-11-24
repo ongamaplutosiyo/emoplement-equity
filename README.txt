@@ -16,6 +16,14 @@ Size
 Up to 6,000 employees in the period. Reading and building a large list takes about 30 to 60
 seconds. The Quatro Cleaning Services list (6,016 rows) builds this way.
 
+Date format
+Choose how text dates in the file are written, on the mapping step, under the column list:
+Detect from the file (recommended), day/month/year, month/day/year, or year/month/day.
+With Detect, the builder looks at the dates: a first number above 12 means day first, a second
+number above 12 means month first. The page shows which order it used. If no date settles it,
+day/month/year is used and the page says so. Dates such as 2026/08/31 are always read year first.
+Excel date values are not affected by this choice.
+
 Who is included
 Only people employed during the period are included: engaged on or before the period end, and
 not terminated before the period started. Anyone engaged after the period end is left out, and
