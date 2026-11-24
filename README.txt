@@ -24,6 +24,10 @@ number above 12 means month first. The page shows which order it used. If no dat
 day/month/year is used and the page says so. Dates such as 2026/08/31 are always read year first.
 Excel date values are not affected by this choice.
 
+Terminations
+The Terminations tab lists everyone whose termination date falls in the period, with each
+heading filterable. It is rebuilt each time you create a workbook.
+
 Who is included
 Only people employed during the period are included: engaged on or before the period end, and
 not terminated before the period started. Anyone engaged after the period end is left out, and

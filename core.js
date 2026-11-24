@@ -747,8 +747,61 @@
     return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  /**
+   * Terminations: everyone whose termination date falls in the period, with a filter on every heading.
+   * The list is written when the workbook is built (it is a list, so it is not recalculated).
+   */
+  function addTerminations(fs, employees, periodStart, periodEnd, meta) {
+    var leavers = employees.filter(function (e) { return e.term !== null && e.term >= periodStart && e.term <= periodEnd; });
+    leavers.sort(function (a, b) { return a.term - b.term || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0); });
+    var dateStyle = dateStyleId(fs), bold = boldStyleId(fs);
+    var headers = ['Employee code', 'Surname', 'Full names', 'Gender', 'Race', 'Nationality', 'Occupational level',
+                   'Permanent / temporary', 'Current position', 'Date engaged', 'Termination date'];
+    var headerRow = 5, first = 6, lastRow = first + leavers.length - 1;
+    var colL = ['A','B','C','D','E','F','G','H','I','J','K'];
+    function sA(rn) { return bold && (rn <= 2 || rn === headerRow) ? ' s="' + bold + '"' : ''; }
+    function txt(ref, v, st) { return '<c r="' + ref + '"' + st + ' t="inlineStr"><is><t xml:space="preserve">' + escXml(v) + '</t></is></c>'; }
+    var rowsXml = [];
+    rowsXml.push('<row r="1">' + txt('A1', 'TERMINATIONS: people whose termination date falls in the period', sA(1)) + '</row>');
+    rowsXml.push('<row r="2">' + txt('A2', 'Company: ' + meta.company + '    Period: ' + meta.periodText, sA(2)) + '</row>');
+    rowsXml.push('<row r="3">' + txt('A3', 'Terminations in the period', '') +
+      (leavers.length ? '<c r="B3"><f>COUNT(K' + first + ':K' + lastRow + ')</f><v></v></c>' : '<c r="B3"><v>0</v></c>') + '</row>');
+    rowsXml.push('<row r="' + headerRow + '">' + headers.map(function (h, i) { return txt(colL[i] + headerRow, h, sA(headerRow)); }).join('') + '</row>');
+    leavers.forEach(function (e, i) {
+      var rn = first + i;
+      var cells = [
+        txt('A' + rn, e.code, ''), txt('B' + rn, e.surname, ''), txt('C' + rn, e.names, ''),
+        txt('D' + rn, e.gender || '(not recorded)', ''),
+        txt('E' + rn, e.race || '(not recorded)', ''),
+        txt('F' + rn, e.nationality || '(not recorded)', ''),
+        txt('G' + rn, e.level || '(not recorded)', ''),
+        txt('H' + rn, e.perm || '(not recorded)', ''),
+        txt('I' + rn, e.curPos || '(not recorded)', ''),
+        '<c r="J' + rn + '"' + (dateStyle ? ' s="' + dateStyle + '"' : '') + '><v>' + (e.engaged === null ? '' : e.engaged) + '</v></c>',
+        '<c r="K' + rn + '"' + (dateStyle ? ' s="' + dateStyle + '"' : '') + '><v>' + e.term + '</v></c>'
+      ];
+      rowsXml.push('<row r="' + rn + '">' + cells.join('') + '</row>');
+    });
+    var sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<sheetViews><sheetView workbookViewId="0"><pane ySplit="' + headerRow + '" topLeftCell="A' + (headerRow + 1) + '" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>' +
+      '<sheetFormatPr defaultRowHeight="15"/>' +
+      '<cols><col min="1" max="1" width="16" customWidth="1"/><col min="2" max="3" width="22" customWidth="1"/><col min="4" max="8" width="18" customWidth="1"/><col min="9" max="9" width="28" customWidth="1"/><col min="10" max="11" width="16" customWidth="1"/></cols>' +
+      '<sheetData>' + rowsXml.join('') + '</sheetData>' +
+      '<autoFilter ref="A' + headerRow + ':K' + Math.max(lastRow, headerRow) + '"/></worksheet>';
+    addSheet(fs, 'Terminations', sheetXml, headerRow, Math.max(lastRow, headerRow), 'K');
+    return leavers.length;
+  }
+
+  /** Style id of a date cell in the template (dd/mm/yyyy, Arial 10). */
+  function dateStyleId(fs) {
+    var m = fs.read(sheetPath(fs, DATA_SHEET)).match(/<c r="AM10"[^>]*?\ss="(\d+)"/);
+    return m ? m[1] : null;
+  }
+
   /** Append a worksheet part to the workbook, with its filter name. */
-  function addSheet(fs, name, sheetXml, headerRow, lastRow) {
+  function addSheet(fs, name, sheetXml, headerRow, lastRow, lastCol) {
+    lastCol = lastCol || 'E';
     var wbPath = 'xl/workbook.xml', relsPath = 'xl/_rels/workbook.xml.rels', ctPath = '[Content_Types].xml';
     var wbXml = fs.read(wbPath), relsXml = fs.read(relsPath), ctXml = fs.read(ctPath);
     var existing = fs.names().filter(function (f) { return /^xl\/worksheets\/sheet\d+\.xml$/.test(f); });
@@ -761,7 +814,7 @@
     var newRid = 'rId' + (Math.max.apply(null, relIds) + 1);
     wbXml = wbXml.replace('</sheets>', function () { return '<sheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" name="' + name + '" sheetId="' + newSheetId + '" r:id="' + newRid + '"/></sheets>'; });
     var idx = (wbXml.match(/<sheet\b/g) || []).length - 1;
-    var fname = '<definedName name="_xlnm._FilterDatabase" localSheetId="' + idx + '" hidden="1">\'' + name + '\'!$A$' + headerRow + ':$E$' + lastRow + '</definedName>';
+    var fname = '<definedName name="_xlnm._FilterDatabase" localSheetId="' + idx + '" hidden="1">\'' + name + '\'!$A$' + headerRow + ':$' + lastCol + '$' + lastRow + '</definedName>';
     if (wbXml.indexOf('<definedNames>') !== -1) wbXml = wbXml.replace('</definedNames>', function () { return fname + '</definedNames>'; });
     else wbXml = wbXml.replace('</sheets>', function () { return '</sheets><definedNames>' + fname + '</definedNames>'; });
     fs.write(wbPath, wbXml);
@@ -804,6 +857,7 @@
       fs.write(setPath, setCellsInSheet(fs.read(setPath), upd.settings));
       addImportLog(fs, summary, result.issues.concat(result.excluded || []), { company: settings.company, periodText: settings.periodText, notes: result.notes || [] });
       addPositions(fs, result.employees, { company: settings.company, periodText: settings.periodText });
+      addTerminations(fs, result.employees, settings.periodStart, settings.periodEnd, { company: settings.company, periodText: settings.periodText });
       // Ask Excel to recalculate everything when the file opens
       var wbXml = fs.read('xl/workbook.xml');
       if (wbXml.indexOf('fullCalcOnLoad') === -1) {

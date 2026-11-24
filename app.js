@@ -265,6 +265,10 @@
     if (per) (EECore.applyPeriod(p.res, per.start, per.end).excluded || []).forEach(function (x) {
       if (x.problem.indexOf('not employed during the period') === 0) leftOut.period++;
     });
+    if (per) {
+      var nTerm = res.employees.filter(function (e) { return e.term !== null && e.term >= per.start && e.term <= per.end; }).length;
+      notes.appendChild(el('p', 'info', nTerm + ' termination(s) in the period. They are listed on the Terminations tab.'));
+    }
     if (leftOut.contractors) notes.appendChild(el('p', 'info', leftOut.contractors + ' independent contractor row(s) left out (not employees under the EEA).'));
     if (leftOut.period) notes.appendChild(el('p', 'info', leftOut.period + ' row(s) left out because the person was not employed during the period (engaged after the period end, or left before it started). They are listed on the Import Log.'));
     var absent = p.det.missing.filter(function (k) {
